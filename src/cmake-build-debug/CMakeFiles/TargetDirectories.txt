@@ -1,0 +1,3 @@
+D:/KPI/6_semestr/TPO/BFS_Parallel_Optimization/src/cmake-build-debug/CMakeFiles/src.dir
+D:/KPI/6_semestr/TPO/BFS_Parallel_Optimization/src/cmake-build-debug/CMakeFiles/edit_cache.dir
+D:/KPI/6_semestr/TPO/BFS_Parallel_Optimization/src/cmake-build-debug/CMakeFiles/rebuild_cache.dir
