@@ -5,48 +5,76 @@
 #ifndef SRC_BFS_H
 #define SRC_BFS_H
 
-#include "Node.h"
 #include <queue>
-#include <any>
+#include <unordered_map>
+#include <optional>
+#include <iostream>
+#include "Node.h"
 
 template <typename T>
-class BFS{
+class BFS {
 public:
-    vector<Node<T>> visited_;
-public:
-    Node<T>& search(Node<T> &start, const T &goal){
-        queue<Node<T>> q_;
-        visited_.clear();
-        q_.push(start);
-        bool found = false;
-        visited_.push_back(start);
-        start.visit();
-        Node<T> &current = start;
-        while (!q_.empty()){
-            current = q_.front();
-            q_.pop();
-            if (*current == goal){
-//                return current;
-                found = true;
-                break;
+    using NodePtr = typename Node<T>::Ptr;
+
+    std::optional<NodePtr> search(NodePtr root, const std::function<bool(const T&)>& goalChecker) {
+        parentMap.clear();
+        if (!root) return std::nullopt;
+
+        std::queue<NodePtr> Q;
+        root->markVisited();
+        visitedQ.push(root);
+        Q.push(root);
+
+        while (!Q.empty()) {
+            NodePtr v = Q.front();
+            Q.pop();
+
+            if (goalChecker(v->getData())) {
+                resetVisited();
+                return v;  // знайдено ціль
             }
-            for (auto &neighbor : current.getNeighbors()){
-                if (!neighbor.visited()){
-                    neighbor.visit();
-                    visited_.push_back(neighbor);
-                    q_.push(neighbor);
+
+            for (NodePtr w : v->getNeighbors()) {
+                if (!w->isVisited()) {
+                    w->markVisited();
+                    visitedQ.push(w);
+                    parentMap[w.get()] = v;  // для побудови шляху
+                    Q.push(w);
                 }
             }
         }
-        for (auto v: visited_){
-            v.unvisit();
-        }
-        if (!found){
-            current = Node<T>(-999);
-        }
-        return current;
 
+        resetVisited();
+        return std::nullopt;  // не знайдено
     }
+
+    void resetVisited(){
+        while (!visitedQ.empty()) {
+            NodePtr node = visitedQ.front();
+            visitedQ.pop();
+            node->resetVisited();
+        }
+    }
+
+    // Відновити шлях до цілі (якщо знайдено)
+    std::vector<NodePtr> reconstructPath(NodePtr goal) const {
+        std::vector<NodePtr> path;
+        while (goal) {
+            path.push_back(goal);
+            auto it = parentMap.find(goal.get());
+            if (it != parentMap.end()) {
+                goal = it->second;
+            } else {
+                break;
+            }
+        }
+        std::reverse(path.begin(), path.end());
+        return path;
+    }
+
+private:
+    std::unordered_map<Node<T>*, NodePtr> parentMap;  // для відновлення шляху
+    std::queue<NodePtr> visitedQ;
 };
 
 #endif //SRC_BFS_H

@@ -12,6 +12,7 @@
 
 template <typename T>
 class Node {
+public:
     using Ptr = std::shared_ptr<Node<T>>;
     using WeakPtr = std::weak_ptr<Node<T>>;
 private:
