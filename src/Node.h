@@ -6,66 +6,48 @@
 #define SRC_NODE_H
 
 #include <vector>
-
-using namespace std;
+#include <memory>
+#include <mutex>
+#include <atomic>
 
 template <typename T>
 class Node {
+    using Ptr = std::shared_ptr<Node<T>>;
+    using WeakPtr = std::weak_ptr<Node<T>>;
 private:
-    T value_;
-    vector<Node<T>> neighbors_;
-    bool visited_ = false;
-
+    T data;
+    std::vector<Ptr> neighbors;
+    mutable std::mutex mutex_;
+    std::atomic<bool> visited;
 public:
-    void visit(){
-        visited_ = true;
-    }
-    void unvisit(){
-        visited_ = false;
+
+
+    explicit Node(const T& value)
+            : data(value), visited(false) {}
+
+    T& getData() { return data; }
+    const T& getData() const { return data; }
+
+    void addNeighbor(const Ptr& neighbor) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        neighbors.push_back(neighbor);
     }
 
-    bool visited() const{
-        return visited_;
+    std::vector<Ptr> getNeighbors() const {
+        std::lock_guard<std::mutex> lock(mutex_);
+        return neighbors;
     }
 
-public:
-    explicit Node(const T& value, vector<Node<int>> &neighbors) : value_(value), neighbors_(neighbors) {}
-    explicit Node(const T& value) : value_(value){}
-    Node(const Node<T>& other){
-        this->value_ = other.value_;
-        this->neighbors_ = other.neighbors_;
-        this->visited_ = other.visited_;
-    }
-    Node& operator=(const Node<T>& other){
-        this->value_ = other.value_;
-        this->neighbors_ = other.neighbors_;
-        this->visited_ = other.visited_;
-        return *this;
+    void markVisited() {
+        visited.store(true, std::memory_order_relaxed);
     }
 
-    T& operator*() {
-        return value_;
+    bool isVisited() const {
+        return visited.load(std::memory_order_relaxed);
     }
 
-    const T& operator*() const {
-        return value_;
-    }
-
-    vector<Node<T>> &getNeighbors(){
-        return neighbors_;
-    }
-
-    void addNeighbor(const Node<T> &neighbor){
-        neighbors_.push_back(neighbor);
-    }
-
-    void addNeighborMutually(Node<T> &neighbor){
-        this->addNeighbor(neighbor);
-        neighbor.addNeighbor(*this);
-    }
-
-    int neighborCount() const {
-        return neighbors_.size();
+    void resetVisited() {
+        visited.store(false, std::memory_order_relaxed);
     }
 
 

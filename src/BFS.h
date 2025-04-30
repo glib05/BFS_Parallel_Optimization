@@ -27,8 +27,8 @@ public:
             q_.pop();
             if (*current == goal){
 //                return current;
-                break;
                 found = true;
+                break;
             }
             for (auto &neighbor : current.getNeighbors()){
                 if (!neighbor.visited()){
