@@ -18,6 +18,7 @@ public:
 private:
     T data;
     std::vector<Ptr> neighbors;
+    Ptr parent;
     mutable std::mutex mutex_;
     std::atomic<bool> visited;
 public:
@@ -32,6 +33,11 @@ public:
     void addNeighbor(const Ptr& neighbor) {
         std::lock_guard<std::mutex> lock(mutex_);
         neighbors.push_back(neighbor);
+    }
+
+    void addParent(const Ptr& p) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        parent = p;
     }
 
     std::vector<Ptr> getNeighbors() const {
