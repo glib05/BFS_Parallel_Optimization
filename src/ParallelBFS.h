@@ -5,14 +5,16 @@
 #ifndef MAIN_CPP_PARALLELBFS_H
 #define MAIN_CPP_PARALLELBFS_H
 
-
-#include <thread>
 #include <atomic>
 #include <vector>
 #include <optional>
 #include <unordered_map>
+#include <functional>
+#include <mutex>
+#include <algorithm>
 #include "Node.h"
 #include "BockingQueue.h"
+#include "ThreadPool.h"
 
 template <typename T>
 class ParallelBFS {
@@ -22,7 +24,7 @@ public:
     std::optional<NodePtr> search(NodePtr root, const std::function<bool(const T&)>& goalChecker, int threadCount) {
         if (!root) return std::nullopt;
 
-        reset();  // очищення стану
+        reset();
 
         root->markVisited();
         visitedQ.push(root);
@@ -32,13 +34,12 @@ public:
         std::optional<NodePtr> result;
         std::mutex resultMtx;
 
-        std::vector<std::thread> workers;
+        ThreadPool pool(threadCount);
 
         for (int i = 0; i < threadCount; ++i) {
-            workers.emplace_back([&]() {
+            pool.enqueue([&]() {
                 NodePtr current;
-
-                while (!found && taskQueue.pop(current)) {
+                while (!found && taskQueue.tryPop(current)) {
                     if (goalChecker(current->getData())) {
                         std::lock_guard<std::mutex> lock(resultMtx);
                         found = true;
@@ -47,11 +48,19 @@ public:
                     }
 
                     for (NodePtr neighbor : current->getNeighbors()) {
-                        std::lock_guard<std::mutex> lock(visitMtx);
-                        if (!neighbor->isVisited()) {
-                            neighbor->markVisited();
-                            visitedQ.push(neighbor);
-                            parentMap[neighbor.get()] = current;
+                        bool shouldVisit = false;
+
+                        {
+                            std::lock_guard<std::mutex> lock(visitMtx);
+                            if (!neighbor->isVisited()) {
+                                neighbor->markVisited();
+                                shouldVisit = true;
+                                visitedQ.push(neighbor);
+                                parentMap[neighbor.get()] = current;
+                            }
+                        }
+
+                        if (shouldVisit) {
                             taskQueue.push(neighbor);
                         }
                     }
@@ -59,9 +68,12 @@ public:
             });
         }
 
-        for (auto& t : workers) t.join();
+        // ThreadPool destructor ensures join of all threads
+        // Wait for all work to finish by destructor
 
+        // Після завершення BFS — скидаємо прапорці visited
         resetVisited();
+
         return result;
     }
 
@@ -82,21 +94,19 @@ public:
 
 private:
     std::unordered_map<Node<T>*, NodePtr> parentMap;
-    std::queue<NodePtr> visitedQ;
+    BlockingQueue<NodePtr> visitedQ;
     BlockingQueue<NodePtr> taskQueue;
     std::mutex visitMtx;
 
     void reset() {
         parentMap.clear();
-        std::queue<NodePtr> empty;
-        std::swap(visitedQ, empty);
-        // taskQueue не очищується вручну, бо одразу додається root
+        visitedQ.clear();
+        taskQueue.clear();
     }
 
     void resetVisited() {
-        while (!visitedQ.empty()) {
-            NodePtr node = visitedQ.front();
-            visitedQ.pop();
+        NodePtr node;
+        while (visitedQ.tryPop(node)) {
             node->resetVisited();
         }
     }

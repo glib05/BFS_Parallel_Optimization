@@ -6,37 +6,83 @@
 #define MAIN_CPP_BOCKINGQUEUE_H
 
 
+#pragma once
+#include <queue>
 #include <mutex>
 #include <condition_variable>
-#include <queue>
 
 template<typename T>
-class BlockingQueue {
-private:
-    std::queue<T> queue;
-    std::mutex mtx;
-    std::condition_variable cv;
-
+class BlockingQueue
+{
 public:
-    void push(const T& value) {
-        std::unique_lock<std::mutex> lock(mtx);
-        queue.push(value);
-        cv.notify_one();
+    void push(T const& _data)
+    {
+        {
+            std::lock_guard<std::mutex> lock(guard);
+            queue.push(_data);
+        }
+        signal.notify_one();
     }
 
-    bool pop(T& value) {
-        std::unique_lock<std::mutex> lock(mtx);
-        cv.wait(lock, [this]() { return !queue.empty(); });
-        value = queue.front();
+    bool empty() const
+    {
+        std::lock_guard<std::mutex> lock(guard);
+        return queue.empty();
+    }
+
+    bool tryPop(T& _value)
+    {
+        std::lock_guard<std::mutex> lock(guard);
+        if (queue.empty())
+        {
+            return false;
+        }
+
+        _value = queue.front();
         queue.pop();
         return true;
     }
 
-    bool empty() {
-        std::unique_lock<std::mutex> lock(mtx);
-        return queue.empty();
-    }
-};
+    void waitAndPop(T& _value)
+    {
+        std::unique_lock<std::mutex> lock(guard);
+        while (queue.empty())
+        {
+            signal.wait(lock);
+        }
 
+        _value = queue.front();
+        queue.pop();
+    }
+
+    bool tryWaitAndPop(T& _value, int _milli)
+    {
+        std::unique_lock<std::mutex> lock(guard);
+        while (queue.empty())
+        {
+            signal.wait_for(lock, std::chrono::milliseconds(_milli));
+            if (queue.empty())
+            {
+                return false;
+            }
+        }
+
+        _value = queue.front();
+        queue.pop();
+        return true;
+    }
+
+    void clear()
+    {
+        std::lock_guard<std::mutex> lock(guard);
+        std::queue<T> empty;
+        std::swap(queue, empty);
+    }
+
+private:
+    std::queue<T> queue;
+    mutable std::mutex guard;
+    std::condition_variable signal;
+};
 
 #endif //MAIN_CPP_BOCKINGQUEUE_H
